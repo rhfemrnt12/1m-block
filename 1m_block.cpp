@@ -27,7 +27,7 @@ void dump(unsigned char* buf, int size) {
 void usage()
 {
 	printf("syntax : 1m-block <site list file>\n");
-	printf("sample : 1m-block top-1m.txt\n");
+	printf("sample : 1m-block top-1m.csv\n");
 }
 
 int flag=0;
@@ -47,7 +47,7 @@ int check_url(unsigned char *data, int ret){
     int tcp_header_len = ((int)tcp_h->th_off)*4;
     int http_data_size = ret - ip_header_len - tcp_header_len;
 
-    if(http_data_size == 0){
+    if(http_data_size <= 0){
         printf("No HTTP data\n\n");
         return 0;
     }
@@ -59,15 +59,13 @@ int check_url(unsigned char *data, int ret){
 
     if( !memcmp(http_data, "GET", 3) || !memcmp(http_data, "HEAD", 4) || !memcmp(http_data, "POST", 4) || !memcmp(http_data, "PUT", 3) || !memcmp(http_data, "DELETE", 6) || !memcmp(http_data, "OPTIONS", 7) || !memcmp(http_data, "CONNECT", 7))
     {
-        size_t h_ptr = h.find("Host: ");
-        if(h_ptr != std::string::npos){ //When "Host: " exist
-            string t_host = h.substr(h_ptr+6);
-            size_t rn = t_host.find("\r\n");
-            t_host = t_host.substr(0, rn);
-            if(host_list.find(t_host) != host_list.end()) return 1;
+        if(h.find("Host: ") != std::string::npos){ //When "Host: " exist
+            h = h.substr(h.find("Host: ")+6);
+            h = h.substr(0, h.find("\r\n"));
+            if(host_list.find(h) != host_list.end()) return 1;
         }
     }
-    return 0;
+	  return 0;
 }
 
 /* returns packet id */
@@ -119,7 +117,7 @@ static u_int32_t print_pkt (struct nfq_data *tb)
 	ret = nfq_get_payload(tb, &data); //data = ip header's address
 
 	if (ret >= 0) printf("payload_len=%d ", ret);
-	
+
 	fputc('\n', stdout);
 
     flag = check_url(data, ret);
@@ -145,24 +143,21 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-    FILE *fp;
-    char file[100]="./";
-    strcat(file, argv[1]);
-    fp = fopen(file, "r");
-    if(fp==NULL){
-        printf("FILE OPEN ERR!\n");
-        return -1;
-    }
+	ifstream list_file(argv[1]);
 
-    char temp[100];
-    while(!feof(fp))
-    {
-        fscanf(fp, "%s\n", temp);
-        char *ptr = strtok(temp, "\t");
-        ptr = strtok(NULL, "\t");
-        string host(ptr);
-        host_list.insert(host);
-    }
+	if(list_file.is_open()){
+		string line;
+		string host;
+		while(list_file){
+			getline(list_file, line);
+			host = line.substr(line.find(",")+1, string::npos);
+			host_list.insert(host);
+		}
+	}
+	else{
+		printf("FILE OPEN ERR!\n");
+		return -1;
+	}
 
 	struct nfq_handle *h;
 	struct nfq_q_handle *qh;
